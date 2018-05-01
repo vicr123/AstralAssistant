@@ -1316,7 +1316,7 @@ function saveSettings(showOkMessage = false) {
     var contents = JSON.stringify(settings, null, 4);
 
     //Encrypt the contents
-    let iv = new Buffer(crypto.randomBytes(16));
+    let iv = Buffer.from(crypto.randomBytes(16));
 
     var cipher = crypto.createCipheriv(cipherAlg, settingsKey, iv);
     var settingsJson = Buffer.concat([
