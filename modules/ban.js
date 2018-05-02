@@ -6,7 +6,7 @@ function sendFinalConfirmationMessage(message) {
     let banObject = bans[message.guild.id][message.author.id];
     let action = banObject.type.toLowerCase();
 
-    let embed = new Discord.RichEmbed();
+    let embed = new Discord.MessageEmbed();
     embed.setTitle(banObject.type);
     embed.setDescription(banObject.type + " this user?");
     embed.addField("User", banObject.user.tag);
@@ -30,7 +30,7 @@ function sendUserSelectMessage(message) {
         userString += "```";
     }
 
-    let embed = new Discord.RichEmbed();
+    let embed = new Discord.MessageEmbed();
     embed.setTitle(banObject.type);
     embed.setDescription("Who do you want to " + action + "?");
     embed.addField("User", userString);
@@ -49,7 +49,7 @@ function sendReasonSelectMessage(message) {
     let banObject = bans[message.guild.id][message.author.id];
     let action = banObject.type.toLowerCase();
     
-    let embed = new Discord.RichEmbed();
+    let embed = new Discord.MessageEmbed();
     embed.setTitle(banObject.type);
 
     if (banObject.type == "Ban") {
@@ -67,18 +67,26 @@ function sendReasonSelectMessage(message) {
 function canAction(user1, user2, guild) {
     //Checks if user1 can [action] user2
     //we've already established they have current permissions so just check the ranks
-    return guild.fetchMember(user1).then(function(member) {
-        user1 = member;
-        return guild.fetchMember(user2);
-    }).then(function(member) {
-        user2 = member;
 
-        if (guild.me.highestRole.comparePositionTo(user2.highestRole) <= 0) {
-            return "bot";
-        } else if (user1.highestRole.comparePositionTo(user2.highestRole) <= 0) {
-            return "user";
+    return new Promise(async function(resolve, reject) {
+        let m1 = guild.members.get(user1.id);
+        if (m1 == undefined) {
+            await guild.members.fetch(user1.id);
+            m1 = guild.members.get(user1.id);
+        }
+
+        let m2 = guild.members.get(user2.id);
+        if (m2 == undefined) {
+            await guild.members.fetch(user2.id);
+            m2 = guild.members.get(user2.id);
+        }
+
+        if (guild.me.roles.highest.comparePositionTo(m2.roles.highest) <= 0) {
+            resolve("bot");
+        } else if (m1.roles.highest.comparePositionTo(m2.roles.highest) <= 0) {
+            resolve("user");
         } else {
-            return false;
+            resolve(false);
         }
     });
 }
@@ -89,7 +97,7 @@ async function capture(message) {
     if (message.content.toLowerCase() == "cancel") {
         releaseInput(message.guild.id, message.author.id);
 
-        let embed = new Discord.RichEmbed();
+        let embed = new Discord.MessageEmbed();
         embed.setTitle(banObject.type);
         embed.setDescription("Alright, I won't " + banObject.type.toLowerCase() + " anyone.");
         embed.setColor([255, 0, 0]);
@@ -202,7 +210,7 @@ async function capture(message) {
         if (isNegative(message.content)) {
             releaseInput(message.guild.id, message.author.id);
     
-            let embed = new Discord.RichEmbed();
+            let embed = new Discord.MessageEmbed();
             embed.setTitle(banObject.type);
             embed.setDescription("Alright, I won't " + banObject.type.toLowerCase() + " anyone.");
             embed.setColor([255, 0, 0]);
@@ -214,7 +222,7 @@ async function capture(message) {
             releaseInput(message.guild.id, message.author.id);
 
             let afterSuccess = function() {
-                let embed = new Discord.RichEmbed();
+                let embed = new Discord.MessageEmbed();
                 embed.setTitle(banObject.type);
     
                 if (banObject.type == "Ban") {
@@ -233,11 +241,9 @@ async function capture(message) {
             }
 
             if (banObject.type == "Ban") {
-                message.guild.ban(banObject.user, {
-                    reason: banObject.reason
-                }).then(afterSuccess).catch(error);
+                message.guild.members.get(banObject.user.id).ban({reason: banObject.reason}).then(afterSuccess).catch(error);
             } else if (banObject.type == "Kick") {
-                message.guild.member(banObject.user).kick(banObject.reason).then(afterSuccess).catch(error);
+                message.guild.members.get(banObject.user.id).kick({reason: banObject.reason}).then(afterSuccess).catch(error);
             }
             return;
         }

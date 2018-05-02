@@ -15,7 +15,7 @@ exports.default = async function(words, message) {
             summary = summary.substr(0, 1000) + "...";
         }
         
-        let embed = new Discord.RichEmbed();
+        let embed = new Discord.MessageEmbed();
         embed.setTitle(data.results[0]);
         embed.addField("Summary", summary);
         embed.setThumbnail(image);

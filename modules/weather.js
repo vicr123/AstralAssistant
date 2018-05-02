@@ -3,6 +3,7 @@ const moment = require('moment');
 const YQL = require('yql');
 const Canvas = require('canvas');
 const fs = require('fs');
+const http = require('http');
 var keys = require('../keys.js');
 
 function extractLocation(words) {
@@ -16,15 +17,85 @@ function extractLocation(words) {
 }
 
 exports.weather = function(words, message) {
-    if (words.indexOf("weather") != -1) {
-        words.splice(words.indexOf("weather"), 1);
-    }
-    if (words.indexOf("forecast") != -1) {
-        words.splice(words.indexOf("forecast"), 1);
-    }
+    db.run("CREATE TABLE IF NOT EXISTS weather (id STRING, loc STRING)");
 
-    let location = extractLocation(words);
-    sendCurrentWeather(message, location, "location", "c");
+    let currentOperation = "";
+    let setOp = function(op) {
+        if (currentOperation == "") currentOperation = op;
+    }
+    for (let index in words) {
+        let word = words[index];
+        let lWord = word.toLowerCase();
+
+        if (lWord == "weather" || lWord == "forecast") {
+            setOp("weather");
+        } else if (lWord == "setloc" || lWord == "live") {
+            setOp("set");
+        }
+    }
+    setOp("weather");
+
+    if (currentOperation == "weather") {
+        let isUser = false;
+        if (words.indexOf("weather") != -1) {
+            words.splice(words.indexOf("weather"), 1);
+        }
+        if (words.indexOf("forecast") != -1) {
+            words.splice(words.indexOf("forecast"), 1);
+        }
+        if (words.indexOf("user") != -1) {
+            isUser = true;
+            words.splice(words.indexOf("user"), 1);
+        }
+        
+        let location = extractLocation(words);
+        if (isUser) {
+            let users = extractUser(location.split(" "));
+            
+            let key = 0;
+            let weatherSend = function() {
+                let user = users[key];
+                db.get("SELECT loc FROM weather WHERE id = ?", [
+                    user.user.id
+                ], function(err, row) {
+                    if (row == null) {
+                        key++;
+
+                        if (users.length == key) {
+                            message.channel.send("No available user.");
+                        } else {
+                            weatherSend();
+                        }
+                    } else {
+                        sendCurrentWeather(message, row.loc, "id", "c", user.user.tag);
+                    }
+                });
+            }
+            weatherSend();
+        } else if (location.trim() == "") {
+            db.get("SELECT loc FROM weather WHERE id = ?", [
+                message.author.id
+            ], function(err, row) {
+                if (row == null) {
+                    message.channel.send("You'll need to tell me where you live if you want to find your weather.");
+                } else {
+                    sendCurrentWeather(message, row.loc, "id", "c", message.author.tag);
+                }
+            });
+        } else {
+            sendCurrentWeather(message, location, "location", "c");
+        }
+    } else if (currentOperation == "set") {
+        if (words.indexOf("setloc") != -1) {
+            words.splice(words.indexOf("setloc"), 1);
+        }
+        if (words.indexOf("live") != -1) {
+            words.splice(words.indexOf("live"), 1);
+        }
+
+        let location = extractLocation(words);
+        setUserWeather(message, location)
+    }
 }
 
 let sunnyImage, cloudyImage, thunderImage, rainImage, windImage, fogImage, humidImage, pressureImage, sunriseImage, sunsetImage, compassImage, snowImage, rainsnowImage;
@@ -230,14 +301,14 @@ function sendCurrentWeather(message, location, type, unit = "c", user = "") {
                     messageToEdit.edit("That didn't work");
                 } else {
                     if (data.query.results == null) {
-                        var embed = new Discord.RichEmbed;
+                        var embed = new Discord.MessageEmbed;
                         embed.setTitle(":thunder_cloud_rain: Weather Error");
                         embed.setDescription("AstralMod couldn't retrieve weather.");
                         embed.setColor("#FF0000");
                         embed.addField("Details", "That city wasn't found");
-                        embed.addField("Try this", "AstralMod has just been updated. If you're trying to retrieve your own weather, try resetting your location with `" + prefix + "setloc`.");
+                        embed.addField("Try this", "AstralMod has just been updated. If you're trying to retrieve your own weather, try telling me where you live again.");
 
-                        messageToEdit.edit(embed)
+                        messageToEdit.edit("", embed)
                         return;
                     }
 
@@ -284,7 +355,20 @@ function sendCurrentWeather(message, location, type, unit = "c", user = "") {
                     ctx.font = "bold 20px Contemporary";
                     ctx.fillStyle = "black";
                     let cityWidth = ctx.measureText(data.query.results.channel.location.city);
-                    ctx.fillText(data.query.results.channel.location.city, 175 - cityWidth.width / 2, 240);
+                    ctx.fillText(data.query.results.channel.location.city, 175 - cityWidth.width / 2, 228);
+
+                    //if (data.query.results.channel.location.region.trim().length < 4) {
+                        ctx.font = "12px Contemporary";
+                        ctx.fillStyle = "black";
+                        let countryWidth = ctx.measureText(data.query.results.channel.location.region + " - " + data.query.results.channel.location.country);
+                        ctx.fillText(data.query.results.channel.location.region + " - " + data.query.results.channel.location.country, 175 - countryWidth.width / 2, 245);
+                    /*} else {
+                        ctx.font = "12px Contemporary";
+                        ctx.fillStyle = "black";
+                        let countryWidth = ctx.measureText(data.query.results.channel.location.region);
+                        ctx.fillText(data.query.results.channel.location.region, 175 - countryWidth.width / 2, 245);
+                    }*/
+
 
                     ctx.font = "40px Contemporary";
                     let conditionWidth = ctx.measureText(data.query.results.channel.item.condition.text);
@@ -402,9 +486,9 @@ function sendCurrentWeather(message, location, type, unit = "c", user = "") {
                         ctx.stroke();
                     }
 
-                    let e = new Discord.RichEmbed();
-                    e.attachFile(new Discord.Attachment(canvas.toBuffer(), "weather.png"))
-                    e.setImage("attachment://weather.png");
+                    let e = new Discord.MessageEmbed();
+                    e.attachFiles([new Discord.MessageAttachment(canvas.toBuffer(), "weather.png")]);
+                    e.setImage("attachment://weather.png");;
                     e.setThumbnail("https://poweredby.yahoo.com/white.png");
                     e.setTitle("Weather");
                     e.setURL(data.query.results.channel.link);
@@ -418,8 +502,75 @@ function sendCurrentWeather(message, location, type, unit = "c", user = "") {
                     });
                 }
             } catch (err) {
-                messageToEdit.edit(err.toString() + "\nTry resetting your location with `" + "prefix setloc`");
+                messageToEdit.edit(err.toString() + "\nTry telling me where you live again.");
             }
         });
+    });
+}
+
+function setUserWeather(message, location) {
+
+    message.channel.send(getEmoji("loader") + " Getting location information...").then(function(messageToEdit) {
+        let query = new YQL("select * from geo.places(1) where text=\"" + location + "\"");
+        
+        query.exec(function(err, data) {
+            try {
+                if (err) {
+                    messageToEdit.edit("That didn't work");
+                } else {
+                    let place;
+                    if (data.query.results.place[0] != null) {
+                        place = data.query.results.place[0];
+                    } else {
+                        place = data.query.results.place;
+                    }
+
+                    if (place == null) {
+                        var embed = new Discord.MessageEmbed;
+                        embed.setTitle(":thunder_cloud_rain: Weather Error");
+                        embed.setDescription("AstralMod couldn't retrieve location information.");
+                        embed.setColor("#FF0000");
+                        embed.addField("Details", "That city wasn't found");
+
+                        messageToEdit.edit(embed)
+                        return;
+                    }
+
+                    let loc = place.woeid;
+
+                    db.get("SELECT id FROM weather WHERE id = ?", [
+                        message.author.id
+                    ], function(err, rows) {
+                        if (err == null) {
+                            let respFunction = function(err) {
+                                if (err == null) {
+                                    messageToEdit.edit("Alright, from now on, your location is " + place.name + ", " + place.country.code + " (" + place.centroid.latitude + ", " + place.centroid.longitude + ")");
+                                } else {
+                                    log("[SQL] " + err.message, logType.critical);
+                                    messageToEdit.edit("There was a database error trying to set your location.");
+                                }
+                            }
+
+                            if (rows == null) {
+                                db.run("INSERT INTO weather VALUES (?, ?)", [
+                                    message.author.id,
+                                    loc
+                                ], respFunction);
+                            } else {
+                                db.run("UPDATE weather SET loc = ? WHERE id = ?", [
+                                    loc,
+                                    message.author.id
+                                ], respFunction);
+                            }
+                        } else {
+                            log("[SQL] " + err.message, logType.critical);
+                            messageToEdit.edit("There was a database error trying to set your location.");
+                        }
+                    });
+                }
+            } catch (err) {
+                messageToEdit.edit(err.toString());
+            }
+        })
     });
 }

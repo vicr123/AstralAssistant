@@ -22,7 +22,7 @@ module.exports = function(command, message) {
             setOp("ban");
         } else if (lWord == "kick" || lWord == "kicked") {
             setOp("kick");
-        } else if (lWord == "weather" || lWord == "forecast") {
+        } else if (lWord == "weather" || lWord == "forecast" || lWord == "live" || lWord == "setloc") {
             setOp("weather");
         } else if (lWord == "play" || lWord == "game") {
             setOp("game");
@@ -62,7 +62,7 @@ module.exports = function(command, message) {
 };
 
 function getHelp() {
-    let embed = new Discord.RichEmbed;
+    let embed = new Discord.MessageEmbed;
     embed.setTitle(botName + " Help");
     embed.setDescription(botName + " aims to understand natural language, so even if it's not on this list, try asking me what you want to do and I might understand.");
     embed.addField("Manage the server", "You can ask me to manage users in your server. For example,\n`Ban vicr123`\n`Kick Vic`\n`Warn vicr123 for introducing AstralAssistant`");

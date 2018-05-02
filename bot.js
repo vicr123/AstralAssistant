@@ -1,3 +1,4 @@
+// @ts-nocheck
 const Discord = require("discord.js");
 const blessed = require("blessed");
 const keys = require("./keys.js");
@@ -11,6 +12,19 @@ const sha256 = crypto.createHash("sha256");
 const settingsKey = keys.settingsKey.slice(0, 32);
 const processCommand = require("./commandProcessor.js");
 const emojiServer = "426703640082776065"; //Change this if you're forking AA :)
+const sqlite3 = require('sqlite3').verbose();
+
+try {
+    if (!fs.existsSync(require('os').homedir() + "/.config")) {
+        fs.mkdirSync(require('os').homedir() + "/.config");
+    }
+    if (!fs.existsSync(require('os').homedir() + "/.config/aa")) {
+        fs.mkdirSync(require('os').homedir() + "/.config/aa");
+    }
+} catch {
+    //ignore filesystem errors
+}
+global.db = new sqlite3.Database(require('os').homedir() + "/.config/aa/db.sqlite", sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE);
 
 let client = new Discord.Client({
     restTimeOffset: 10,
